@@ -30,7 +30,14 @@ config = sidebar_settings()
 
 # Main content
 st.title("🔍 Literature Search")
-st.markdown("Smart mining with query expansion, scoring, and ChromaDB storage")
+st.markdown("Smart mining with **AI-powered query expansion**, scoring, and ChromaDB storage")
+
+# Show AI expansion status
+from config import USE_AI_EXPANSION, DEEPSEEK_API_KEY
+if USE_AI_EXPANSION and DEEPSEEK_API_KEY:
+    st.success("🤖 AI Query Expansion: **Enabled** (Supports any medical domain)")
+else:
+    st.info("📝 Query Expansion: Legacy config-based mode")
 
 # Search form
 with st.form("search_form"):
@@ -42,12 +49,16 @@ with st.form("search_form"):
     
     limit = st.slider(
         "Maximum Papers",
-        min_value=10,
-        max_value=100,
-        value=20,
-        step=5,
-        help="Number of papers to retrieve and score"
+        min_value=50,
+        max_value=500,
+        value=200,
+        step=50,
+        help="检索深度：50-200篇（免费），201-500篇（PRO功能，即将推出）"
     )
+    
+    # VIP tier hint
+    if limit > 200:
+        st.info("💎 深度检索（200+篇）即将推出PRO订阅功能，敬请期待！")
     
     submitted = st.form_submit_button("🔍 Search", type="primary")
 

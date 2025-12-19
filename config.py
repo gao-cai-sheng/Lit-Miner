@@ -28,15 +28,74 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 PUBMED_EMAIL = os.getenv("PUBMED_EMAIL", "your_email@example.com")
 
+# AI Query Expansion (v2.0)
+USE_AI_EXPANSION = True  # Set to False to use legacy config-based expansion
+AI_EXPANSION_TIMEOUT = 10  # seconds
+AI_EXPANSION_CACHE_ENABLED = True
+
 # Mining Configuration - Rubric Scoring System
 RUBRIC_CONFIG = {
     # Top journals and their score weights
+    # Multi-domain support: Dentistry, Neuroscience, Cardiology, Oncology, General Medicine
     "top_journals": {
+        # === Dentistry / Periodontology (Original) ===
         "Periodontology 2000": 10,
         "Journal of clinical periodontology": 8,
         "Journal of periodontology": 6,
         "Clinical oral implants research": 5,
         "International journal of oral implantology": 5,
+        
+        # === Neuroscience (High Impact) ===
+        "Nature Neuroscience": 15,
+        "Neuron": 15,
+        "Nature Reviews Neuroscience": 15,
+        "Brain": 12,
+        "Lancet Neurology": 12,
+        "JAMA Neurology": 12,
+        "Annals of Neurology": 12,
+        "Biological Psychiatry": 10,
+        "Journal of Neuroscience": 8,
+        "Molecular Psychiatry": 8,
+        "Trends in Neurosciences": 8,
+        "Cerebral Cortex": 7,
+        "NeuroImage": 7,
+        "Journal of Neurophysiology": 6,
+        
+        # === Cardiology ===
+        "Circulation": 15,
+        "European Heart Journal": 15,
+        "Journal of the American College of Cardiology": 14,
+        "JAMA Cardiology": 12,
+        "Circulation Research": 10,
+        "Cardiovascular Research": 8,
+        
+        # === Oncology ===
+        "CA: A Cancer Journal for Clinicians": 15,
+        "Nature Reviews Cancer": 15,
+        "The Lancet Oncology": 14,
+        "Journal of Clinical Oncology": 12,
+        "Cancer Cell": 12,
+        "Annals of Oncology": 10,
+        
+        # === General Medicine (Top Tier) ===
+        "Nature": 16,
+        "Science": 16,
+        "The New England Journal of Medicine": 16,
+        "The Lancet": 15,
+        "JAMA": 15,
+        "Nature Medicine": 15,
+        "BMJ": 12,
+        "PLOS Medicine": 10,
+        
+        # === Psychiatry / Mental Health ===
+        "American Journal of Psychiatry": 10,
+        "JAMA Psychiatry": 10,
+        "Schizophrenia Bulletin": 8,
+        
+        # === Immunology / Infectious Disease ===
+        "Nature Immunology": 14,
+        "Immunity": 14,
+        "The Lancet Infectious Diseases": 12,
     },
     
     # Citation score rules: [(threshold, score), ...]

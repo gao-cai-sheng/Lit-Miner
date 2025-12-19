@@ -1,22 +1,26 @@
 """
-Query Expansion Module
-Handles Chinese-to-English translation and query expansion for PubMed searches
+Query Expansion Module v2.0
+AI-powered dynamic query expansion using DeepSeek API
 """
 
 import re
-from typing import List, Tuple
-from config import QUERY_EXPANSION_CONFIG
+import json
+import requests
+from typing import Dict, Optional
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, QUERY_EXPANSION_CONFIG
 
 
-def expand_query(user_query: str) -> str:
+# Simple cache to avoid repeated API calls for same queries
+_expansion_cache: Dict[str, str] = {}
+
+
+def expand_query(user_query: str, use_ai: bool = True) -> str:
     """
-    Expand user query with synonyms and related terms.
-    
-    For Chinese queries: translates to English with medical synonyms
-    For English queries: adds Boolean operators and field restrictions
+    Expand user query using AI-powered intelligent expansion.
     
     Args:
-        user_query: Raw search query (Chinese or English)
+        user_query: Raw search query (any language)
+        use_ai: If True, use DeepSeek API; if False, use legacy config-based expansion
         
     Returns:
         Expanded PubMed search query
@@ -25,26 +29,134 @@ def expand_query(user_query: str) -> str:
     if not q:
         return ""
     
-    q_lower = q.lower()
+    # Check cache first
+    if q in _expansion_cache:
+        return _expansion_cache[q]
     
-    # Check if query contains Chinese characters
+    # Detect if query contains Chinese characters
     has_chinese = bool(re.search(r"[\u4e00-\u9fff]", q))
     
+    # Try AI expansion first (if enabled and API key available)
+    if use_ai and DEEPSEEK_API_KEY:
+        try:
+            expanded = _expand_with_ai(q, has_chinese=has_chinese)
+            if expanded and expanded != q:
+                # Cache successful expansion
+                _expansion_cache[q] = expanded
+                return expanded
+        except Exception as e:
+            print(f"[Warning] AI expansion failed: {e}, falling back to legacy method")
+    
+    # Fallback to legacy config-based expansion
     if has_chinese:
-        return _expand_chinese_query(q)
+        expanded = _expand_chinese_query_legacy(q)
+    else:
+        expanded = _expand_generic_query(q)
     
-    # English-specific patterns
-    if "socket" in q_lower and "preserv" in q_lower:
-        return '("socket preservation" OR "alveolar ridge preservation" OR "extraction socket management" OR "ridge preservation") AND ("bone height" OR "vertical dimension" OR "alveolar bone")'
-    
-    # Generic expansion: add Title/Abstract restrictions
-    return _expand_generic_query(q)
+    _expansion_cache[q] = expanded
+    return expanded
 
 
-def _expand_chinese_query(query: str) -> str:
-    """Expand Chinese medical query to English Boolean query"""
-    core_clauses: List[str] = []
-    modifier_clauses: List[str] = []
+def _expand_with_ai(query: str, has_chinese: bool = False) -> str:
+    """
+    Use DeepSeek API to intelligently expand query.
+    
+    Args:
+        query: User query (any language)
+        has_chinese: Whether query contains Chinese characters
+        
+    Returns:
+        Expanded PubMed Boolean query
+    """
+    if has_chinese:
+        prompt = f"""You are a medical literature search expert. Convert the following Chinese medical query into an optimized PubMed Boolean search query.
+
+Requirements:
+1. Translate Chinese terms to English medical terminology
+2. Include common synonyms and variations
+3. Include relevant abbreviations (e.g., "TBI" for "traumatic brain injury")
+4. Use Boolean operators: OR for synonyms, AND for different concepts
+5. Use quotes for exact phrases
+6. Output ONLY the PubMed search query, no explanations
+
+Example:
+Input: 牙周炎治疗
+Output: ("periodontitis" OR "chronic periodontitis" OR "periodontal disease") AND ("treatment" OR "therapy" OR "intervention")
+
+Now process this query:
+Input: {query}
+Output:"""
+    else:
+        prompt = f"""You are a medical literature search expert. Optimize the following medical query for PubMed search.
+
+Requirements:
+1. Add relevant medical synonyms and variations
+2. Include common abbreviations
+3. Use Boolean operators: OR for synonyms, AND for different concepts
+4. Use quotes for exact phrases
+5. Output ONLY the PubMed search query, no explanations
+
+Example:
+Input: brain injury recovery
+Output: ("traumatic brain injury" OR "TBI" OR "brain trauma") AND ("recovery" OR "rehabilitation" OR "functional outcome")
+
+Now process this query:
+Input: {query}
+Output:"""
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3,  # Lower temperature for more consistent results
+            "max_tokens": 300
+        }
+        
+        response = requests.post(
+            f"{DEEPSEEK_BASE_URL}/chat/completions",
+            json=data,
+            headers=headers,
+            timeout=10  # 10 second timeout
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            expanded_query = result["choices"][0]["message"]["content"].strip()
+            
+            # Clean up the response (remove any markdown formatting, extra quotes, etc.)
+            expanded_query = expanded_query.strip('`"\'')
+            
+            # Validate that we got a reasonable query back
+            if len(expanded_query) > 0 and len(expanded_query) < 1000:
+                return expanded_query
+            else:
+                print(f"[Warning] AI returned invalid query length: {len(expanded_query)}")
+                return query
+        else:
+            print(f"[Error] API returned status {response.status_code}: {response.text}")
+            return query
+            
+    except requests.exceptions.Timeout:
+        print("[Error] AI expansion timeout")
+        return query
+    except Exception as e:
+        print(f"[Error] AI expansion failed: {e}")
+        return query
+
+
+def _expand_chinese_query_legacy(query: str) -> str:
+    """
+    Legacy config-based Chinese query expansion (fallback).
+    """
+    core_clauses = []
+    modifier_clauses = []
     
     # Combine all term mappings from config
     all_terms = {}
@@ -69,14 +181,25 @@ def _expand_chinese_query(query: str) -> str:
             return f"({core_part}) AND ({mod_part})"
         return core_part
     
-    # Fallback: if no matches, use original query
+    # If no matches found, return original
     return query
 
 
 def _expand_generic_query(query: str) -> str:
-    """Generic expansion with Title/Abstract field restrictions"""
+    """
+    Generic expansion for English queries without AI.
+    Adds Title/Abstract field restrictions.
+    """
+    # Check for common patterns first
+    q_lower = query.lower()
+    
+    # Socket preservation pattern (legacy)
+    if "socket" in q_lower and "preserv" in q_lower:
+        return '("socket preservation" OR "alveolar ridge preservation" OR "extraction socket management" OR "ridge preservation")'
+    
+    # Generic field restriction
     tokens = re.split(r"(\s+AND\s+|\s+OR\s+)", query, flags=re.IGNORECASE)
-    expanded_parts: List[str] = []
+    expanded_parts = []
     
     for t in tokens:
         t_strip = t.strip()
@@ -86,6 +209,20 @@ def _expand_generic_query(query: str) -> str:
             expanded_parts.append(t_strip.upper())
             continue
         # Add field restriction
-        expanded_parts.append(f'({t_strip} OR "{t_strip}"[Title/Abstract])')
+        expanded_parts.append(f'({t_strip}[Title/Abstract])')
     
     return " ".join(expanded_parts)
+
+
+def clear_cache():
+    """Clear the expansion cache (useful for testing)"""
+    global _expansion_cache
+    _expansion_cache.clear()
+
+
+def get_cache_stats() -> Dict[str, int]:
+    """Get cache statistics"""
+    return {
+        "cached_queries": len(_expansion_cache),
+        "cache_size_bytes": len(str(_expansion_cache))
+    }
