@@ -7,7 +7,7 @@ import re
 import json
 import requests
 from typing import Dict, Optional
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, QUERY_EXPANSION_CONFIG
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
 
 
 # Simple cache to avoid repeated API calls for same queries
