@@ -5,6 +5,74 @@ All notable changes to Lit-Miner will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2025-12-20
+
+### 🛡️ Quality Assurance Features
+
+This patch release implements three critical quality controls to improve literature selection accuracy and reliability.
+
+#### 1. Retraction Detection ⚠️
+- **Automatic detection** of retracted papers via PubMed metadata
+- Checks `PublicationTypeList` for retraction status
+- Monitors `CommentsCorrectionsList` for RetractionIn/RetractionOf notices
+- **Retracted papers are completely excluded** from results
+- Prevents inclusion of fraudulent or invalid research
+
+#### 2. Preprint Marking 📄
+- **Identifies preprint servers**: bioRxiv, medRxiv, arXiv, SSRN
+- Applies **50% score penalty** to preprints
+- Adds `is_preprint` flag to paper metadata
+- Reduces overweighting of unreviewed research
+- Maintains transparency (preprints still visible but deprioritized)
+
+#### 3. Impact Factor Integration 🔬
+- **Created** `core/impact_factors.py` with 50+ journal IFs (2023 JCR data)
+- **Bonus scoring system**:
+  - IF ≥ 50: +5 points (CA-Cancer, NEJM, Lancet)
+  - IF ≥ 20: +4 points (Nature, Science, major reviews)
+  - IF ≥ 10: +3 points (Brain, JAMA Neurology)
+  - IF ≥ 5: +2 points (JCO, Circulation Research)
+  - IF ≥ 2: +1 point (decent journals)
+- Adds `impact_factor` value to paper metadata
+- Better differentiation beyond top journal whitelist
+
+### 🔧 Technical Changes
+
+#### Modified Files
+- **`core/miners/smart_miner.py`**:
+  - Added `_check_retraction_status()` method
+  - Added `_check_preprint()` method
+  - Integrated impact factor scoring in `_score_papers()`
+  - Updated paper metadata schema
+
+- **`core/impact_factors.py`** (NEW):
+  - `JOURNAL_IMPACT_FACTORS`: Database of 50+ journal IFs
+  - `get_impact_factor()`: Fuzzy journal name matching
+  - `calculate_if_score()`: IF to score conversion
+
+### 📊 Impact
+
+**Before v2.0.1**:
+- No protection against retracted papers
+- Preprints weighted equally with peer-reviewed papers
+- Journal quality limited to binary (in whitelist or not)
+
+**After v2.0.1**:
+- ✅ Retracted papers automatically excluded
+- ✅ Preprints appropriately deprioritized
+- ✅ Nuanced journal quality assessment (0-5 bonus points)
+
+**Example**: Searching "阿尔茨海默病" with 200 papers:
+- May now select 9-10 papers (was 8) due to better scoring
+- Higher quality selection with IF bonuses
+- Zero retracted papers in results
+
+### 🐛 Bug Fixes
+- Fixed import statements in `smart_miner.py`
+- Improved error handling in scoring pipeline
+
+---
+
 ## [2.0.0] - 2025-12-19
 
 ### 🚀 Major Features
