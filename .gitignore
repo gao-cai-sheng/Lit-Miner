@@ -56,3 +56,9 @@ DEVELOPER_CONFIG.md
 
 # Private data files (journal rankings, impact factors)
 core/impact_factors.py
+core/journal_rankings.py
+*综述.md
+reviews/
+outputs/
+prompts/
+*.prompt
