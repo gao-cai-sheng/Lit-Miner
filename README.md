@@ -1,8 +1,20 @@
 # Lit-Miner
 
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Python](https://img.shields.io/badge/Python-3.8%2B-green)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 AI-Powered Literature Mining & Review Generation
 
 一个智能文献研究助手，结合PubMed智能搜索、AI综述生成和本地PDF处理功能。
+
+> **🎉 最新更新 v2.0** (2025-12-19)
+> - 🤖 **AI查询扩展**: 零配置支持任意医学领域（神经科学、心血管、肿瘤等）
+> - 🌍 **50+顶级期刊**: Nature、Science、NEJM、Lancet等多领域支持
+> - 📊 **检索深度提升**: 默认200篇（10倍提升），最高500篇
+> - 💎 **PRO功能预览**: 分层订阅UI已集成
+>
+> [查看完整更新日志 →](CHANGELOG.md)
 
 ---
 
