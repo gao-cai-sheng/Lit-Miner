@@ -53,3 +53,6 @@ temp/
 
 # Private developer documentation (not for GitHub)
 DEVELOPER_CONFIG.md
+
+# Private data files (journal rankings, impact factors)
+core/impact_factors.py
