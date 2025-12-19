@@ -50,3 +50,6 @@ data/
 tmp/
 temp/
 *.tmp
+
+# Private developer documentation (not for GitHub)
+DEVELOPER_CONFIG.md
