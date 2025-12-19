@@ -1,9 +1,10 @@
 """
-Smart Miner - Intelligent PubMed Literature Mining
-Fetches, scores, and ranks papers based on configurable rubric
+Smart Literature Miner
+Intelligent PubMed mining with rubric-based scoring
 """
 
 import re
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Tuple, Optional, Callable
 
@@ -12,10 +13,17 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 
 from config import (
-    RUBRIC_CONFIG, 
+    RUBRIC_CONFIG,
     EMBEDDING_MODEL,
     PUBMED_EMAIL
 )
+from core.impact_factors import get_impact_factor, calculate_if_score
+
+try:
+    from metapub import PubMedFetcher
+    METAPUB_AVAILABLE = True
+except ImportError:
+    METAPUB_AVAILABLE = False
 
 
 class SmartMiner:
@@ -23,7 +31,7 @@ class SmartMiner:
     Intelligent literature miner for PubMed.
     Scores papers based on: journal quality, recency, data richness, citations
     """
-    
+
     def __init__(self, email: str = None, log_callback: Optional[Callable] = None):
         """
         Args:
@@ -34,28 +42,28 @@ class SmartMiner:
         Entrez.email = self.email
         self.log_callback = log_callback
         self.rubric = RUBRIC_CONFIG
-    
+
     def _log(self, message: str):
         """Log message via callback if provided"""
         if self.log_callback:
             self.log_callback(message)
         else:
             print(message)
-    
+
     def mine(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Execute full mining pipeline.
-        
+
         Args:
             search_term: PubMed search query (already expanded)
             limit: Maximum number of papers to fetch
-            
+
         Returns:
             List of selected papers with scores and metadata
         """
         self._log(f"🔍 Starting smart mining: searching PubMed...")
         self._log(f"📝 Query: {search_term[:100]}...")
-        
+
         # 1. Search PubMed for IDs
         try:
             handle = Entrez.esearch(
@@ -67,16 +75,16 @@ class SmartMiner:
             record = Entrez.read(handle)
             handle.close()
             id_list = record["IdList"]
-            
+
             if not id_list:
                 self._log("⚠️ No papers found")
                 return []
-                
+
             self._log(f"✅ Found {len(id_list)} papers")
         except Exception as e:
             self._log(f"❌ Search failed: {e}")
             return []
-        
+
         # 2. Fetch details
         self._log("📦 Fetching paper details...")
         try:
@@ -91,22 +99,22 @@ class SmartMiner:
         except Exception as e:
             self._log(f"❌ Fetch failed: {e}")
             return []
-        
+
         # 3. Get citation counts
         self._log("📊 Fetching citation data...")
         citation_counts = self._get_citations(id_list)
-        
+
         # 4. Score all papers
         self._log("⚙️ Scoring papers...")
         processed = self._score_papers(articles, citation_counts)
-        
+
         # 5. Select final papers
         self._log(f"🎯 Selecting final papers based on rubric...")
         final_papers = self._select_final_papers(processed)
-        
+
         self._log(f"✅ Selected {len(final_papers)} papers")
         return final_papers
-    
+
     def _get_citations(self, pmid_list: List[str]) -> Dict[str, int]:
         """Get citation counts via elink"""
         citation_counts = {}
@@ -119,7 +127,7 @@ class SmartMiner:
             )
             linksets = Entrez.read(handle)
             handle.close()
-            
+
             for ls in linksets:
                 src_list = ls.get("IdList", [])
                 if not src_list:
@@ -132,9 +140,9 @@ class SmartMiner:
                 citation_counts[src_pmid] = count
         except Exception:
             pass
-        
+
         return citation_counts
-    
+
     def _extract_abstract(self, article: Dict[str, Any]) -> str:
         """Extract abstract text from article structure"""
         try:
@@ -145,7 +153,7 @@ class SmartMiner:
             )
             if not abstract_data:
                 return ""
-            
+
             if isinstance(abstract_data, list):
                 text_parts = []
                 for item in abstract_data:
@@ -157,30 +165,50 @@ class SmartMiner:
             return str(abstract_data)
         except Exception:
             return ""
-    
+
     def _score_papers(self, articles: List[Dict], citation_counts: Dict[str, int]) -> List[Dict[str, Any]]:
         """Score all papers and return processed list"""
         processed = []
-        
+
         for article in articles:
             try:
                 pmid = str(article["MedlineCitation"]["PMID"])
                 article_core = article["MedlineCitation"]["Article"]
                 title = article_core.get("ArticleTitle", "No Title")
                 abstract = self._extract_abstract(article)
-                
+
                 if not abstract:
                     continue
-                
+
+                # ⚠️ Quality Assurance 1: Check for retraction
+                is_retracted = self._check_retraction_status(article)
+                if is_retracted:
+                    self._log(f"⚠️  Skipping retracted paper: {title[:50]}...")
+                    continue  # Skip retracted papers entirely
+
                 # Calculate base score
                 score, journal, year, reasons, is_review = self._calculate_score(article)
-                
+
+                # 🔬 Quality Assurance 2: Impact Factor bonus
+                impact_factor = get_impact_factor(journal)
+                if impact_factor > 0:
+                    if_score = calculate_if_score(impact_factor)
+                    if if_score > 0:
+                        score += if_score
+                        reasons.append(f"IF={impact_factor}(+{if_score})")
+
+                # 📄 Quality Assurance 3: Preprint marking
+                is_preprint = self._check_preprint(journal)
+                if is_preprint:
+                    score = int(score * 0.5)  # 50% penalty for preprints
+                    reasons.append("preprint(-50%)")
+
                 # Data quality bonus
                 bone_vals = re.findall(r"(\d+\.?\d*)\s?mm", abstract)
                 if bone_vals:
                     score += self.rubric["data_quality_bonus"]
                     reasons.append(f"data(+{self.rubric['data_quality_bonus']})")
-                
+
                 # Citation bonus
                 citations = citation_counts.get(pmid, 0)
                 if citations > 0:
@@ -188,7 +216,7 @@ class SmartMiner:
                     if cite_score > 0:
                         score += cite_score
                         reasons.append(f"cited(+{cite_score})")
-                
+
                 # Extract DOI if available
                 doi = ""
                 try:
@@ -199,7 +227,7 @@ class SmartMiner:
                             break
                 except Exception:
                     pass
-                
+
                 processed.append({
                     "id": pmid,
                     "title": title,
@@ -208,33 +236,35 @@ class SmartMiner:
                     "year": year,
                     "score": score,
                     "is_review": is_review,
+                    "is_preprint": is_preprint,
+                    "impact_factor": impact_factor,
                     "citations": citations,
                     "doi": doi,
                     "reasons": ", ".join(reasons) if reasons else "base"
                 })
             except Exception:
                 continue
-        
+
         return processed
-    
+
     def _calculate_score(self, article: Dict[str, Any]) -> Tuple[int, str, int, List[str], bool]:
         """Calculate base score for one paper"""
         score = 1
         reasons = []
-        
+
         # Journal
         journal = "Unknown"
         try:
             journal = article["MedlineCitation"]["Article"]["Journal"].get("Title", "Unknown")
         except Exception:
             pass
-        
+
         for name, points in self.rubric["top_journals"].items():
             if name.lower() in journal.lower():
                 score += points
                 reasons.append(f"journal(+{points})")
                 break
-        
+
         # Year
         year = 2020
         try:
@@ -245,7 +275,7 @@ class SmartMiner:
                 found = re.search(r"\d{4}", pub_date["MedlineDate"])
                 if found:
                     year = int(found.group())
-            
+
             gap = datetime.now().year - year
             year_score = max(0, self.rubric["recency_max_score"] - gap)
             if year_score > 0:
@@ -253,7 +283,7 @@ class SmartMiner:
                 reasons.append(f"recent(+{year_score})")
         except Exception:
             pass
-        
+
         # Review check
         is_review = False
         try:
@@ -265,16 +295,55 @@ class SmartMiner:
                     break
         except Exception:
             pass
-        
+
         return score, journal, year, reasons, is_review
-    
-    def _get_citation_score(self, citations: int) -> int:
-        """Get score bonus for citation count"""
-        for threshold, score in sorted(self.rubric["citation_rules"], reverse=True):
-            if citations >= threshold:
-                return score
+
+    def _check_retraction_status(self, article: Dict[str, Any]) -> bool:
+        """
+        Check if paper has been retracted
+
+        PubMed marks retracted papers in PublicationTypeList
+        """
+        try:
+            pub_types = article["MedlineCitation"]["Article"].get("PublicationTypeList", [])
+            for pt in pub_types:
+                pt_str = str(pt).lower()
+                if "retract" in pt_str:
+                    return True
+
+            # Also check in Comments/Corrections
+            comments = article.get("MedlineCitation", {}).get("CommentsCorrectionsList", [])
+            for comment in comments:
+                if hasattr(comment, "attributes"):
+                    ref_type = comment.attributes.get("RefType", "")
+                    if ref_type in ["RetractionIn", "RetractionOf"]:
+                        return True
+
+            return False
+        except Exception:
+            return False
+
+    def _check_preprint(self, journal: str) -> bool:
+        """
+        Check if paper is from a preprint server
+
+        Preprint servers: bioRxiv, medRxiv, arXiv, etc.
+        """
+        if not journal:
+            return False
+
+        journal_lower = journal.lower()
+        preprint_servers = ["biorxiv", "medrxiv", "arxiv", "ssrn", "preprint"]
+
+        return any(server in journal_lower for server in preprint_servers)
+
+    def _get_citation_score(self, count: int) -> int:
+        """Calculate citation score"""
+        for threshold, points in sorted(self.rubric["citation_rules"], reverse=True):
+            if count >= threshold:
+                return points
         return 0
-    
+
     def _select_final_papers(self, processed: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Select final papers based on strategy"""
         if not processed:
