@@ -1,0 +1,18 @@
+streamlit
+biopython
+openai
+sentence-transformers
+chromadb
+deepseek-api
+requests
+beautifulsoup4
+matplotlib
+python-dotenv
+
+# PDF processing (for local Read functionality)
+pymupdf
+layoutparser
+pdf2image
+opencv-python
+torch
+torchvision
