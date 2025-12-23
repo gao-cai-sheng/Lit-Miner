@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Environment variables (IMPORTANT: Keep API keys private!)
+.env
+
+# Data directories (too large for GitHub)
+data/
+*.db
+*.sqlite3
+
+# PDF files (can be large)
+*.pdf
+
+# LayoutParser model cache (large AI model files)
+.layoutparser/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Private developer documentation (not for GitHub)
+DEVELOPER_CONFIG.md
+
+# Private data files (journal rankings, impact factors)
+core/impact_factors.py
+core/journal_rankings.py
+*综述.md
+reviews/
+outputs/
+prompts/
+*.prompt
+PRIVACY_AUDIT.md
+LOCAL_MAINTENANCE.md
+backup/
+IMPLEMENTATION_STATUS.md
+QUICKSTART.md
