@@ -1,6 +1,6 @@
 # Lit-Miner
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue)
+![Version](https://img.shields.io/badge/version-2.3.1-blue)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -8,7 +8,7 @@ AI-Powered Literature Mining & Review Generation
 
 一个智能文献研究助手，结合PubMed智能搜索、AI综述生成和本地PDF处理功能。
 
-> **🎉 最新更新 v2.1.0** (2025-12-26)
+> **🎉 最新更新 v2.3.1** (2025-12-26)
 > - 🤖 **模型升级**: 统一DeepSeek (写作) + Gemini (向量/评测) 双引擎
 > - 🧹 **智能清洗**: 自动识别并切除PDF Reference，大幅提升Chatbot回答质量
 > - ⚡ **性能优化**: 向量维度升级(768d)，上下文窗口扩大5倍
