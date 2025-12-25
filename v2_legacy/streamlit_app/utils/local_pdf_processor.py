@@ -62,7 +62,12 @@ def extract_text_to_markdown(pdf_path: str) -> str:
     markdown_lines.append(f"**Pages**: {len(doc)}\n\n")
     markdown_lines.append("---\n\n")
     
+    references_started = False
+    
     for page_num in range(len(doc)):
+        if references_started:
+            break
+            
         page = doc[page_num]
         
         # Add page header
@@ -78,6 +83,21 @@ def extract_text_to_markdown(pdf_path: str) -> str:
                 if not text:
                     continue
                 
+                # Check for References section header
+                # Strict check to avoid false positives in sentences
+                is_ref_header = (
+                    text.lower() in ["references", "bibliography", "literature cited"] or
+                    text.lower().startswith("references\n") or
+                    text.lower() == "references" 
+                )
+                
+                # If it's a likely header (short, standalone)
+                if is_ref_header and len(text) < 30:
+                    print(f"[*] Found References section on page {page_num+1}, stopping text extraction.")
+                    markdown_lines.append("\n--- [References Removed] ---\n")
+                    references_started = True
+                    break
+
                 # Simple heuristic for formatting
                 if len(text) < 100 and text.isupper():
                     # Likely a heading

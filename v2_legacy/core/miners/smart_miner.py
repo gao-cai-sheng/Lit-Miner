@@ -10,14 +10,17 @@ from typing import Any, Dict, List, Tuple, Optional, Callable
 
 from Bio import Entrez
 import chromadb
-from sentence_transformers import SentenceTransformer
+import chromadb
+# from sentence_transformers import SentenceTransformer # Deprecated: Switched to Gemini
+# from core.chatbot.gemini_embeddings import GeminiEmbeddings
+
 
 from config import (
     RUBRIC_CONFIG,
     EMBEDDING_MODEL,
     PUBMED_EMAIL
 )
-from core.impact_factors import get_impact_factor, calculate_if_score
+# from core.impact_factors import get_impact_factor, calculate_if_score
 
 try:
     from metapub import PubMedFetcher
@@ -190,6 +193,7 @@ class SmartMiner:
                 score, journal, year, reasons, is_review = self._calculate_score(article)
 
                 # 🔬 Quality Assurance 2: Impact Factor bonus
+                from core.impact_factors import get_impact_factor, calculate_if_score
                 impact_factor = get_impact_factor(journal)
                 if impact_factor > 0:
                     if_score = calculate_if_score(impact_factor)
@@ -405,8 +409,66 @@ class PersistentMemory:
             data_dir: Directory path for ChromaDB storage
         """
         self.client = chromadb.PersistentClient(path=data_dir)
-        self.embedding_fn = SentenceTransformer(EMBEDDING_MODEL)
+        # self.embedding_fn = SentenceTransformer(EMBEDDING_MODEL)
+        from core.chatbot.gemini_embeddings import GeminiEmbeddings
+        self.embeddings = GeminiEmbeddings()
         self.collection = self.client.get_or_create_collection(name=db_name)
+        
+        # Check and migrate if dimensions don't match (legacy 384 -> gemini 768)
+        self._migrate_if_needed(db_name)
+
+    def _migrate_if_needed(self, db_name: str, force: bool = False):
+        """Check embedding dimension and migrate if mismatch"""
+        try:
+            # Peek to check dimension unless forced
+            if not force:
+                peek = self.collection.peek(limit=1)
+                if not peek or not peek["embeddings"]:
+                    return
+                
+                curr_dim = len(peek["embeddings"][0])
+                expected_dim = 768 # Gemini text-embedding-004
+                if curr_dim == expected_dim:
+                    return
+
+            print(f"⚠️ Vector DB dimension mismatch or forced migration. Migrating...")
+
+            # Fetch all existing data
+            all_data = self.collection.get()
+            if not all_data["ids"]:
+                return
+            
+            print(f"📦 Migrating {len(all_data['ids'])} documents...")
+            ids = all_data["ids"]
+            docs = all_data["documents"]
+            metas = all_data["metadatas"]
+            
+            # Delete old collection
+            self.client.delete_collection(name=db_name)
+            
+            # Create new
+            self.collection = self.client.create_collection(name=db_name)
+            
+            # Re-embed and add
+            new_embeddings = self.embeddings.embed_documents(docs)
+            self.collection.add(
+                ids=ids,
+                embeddings=new_embeddings,
+                documents=docs,
+                metadatas=metas
+            )
+            print("✅ Migration complete!")
+                
+        except Exception as e:
+            print(f"❌ Migration failed: {e}")
+
+    def _force_migration(self):
+        """Force migration of current collection"""
+        self._migrate_if_needed(self.collection.name, force=True)
+
+
+
+
     
     def add_papers(self, papers: List[Dict[str, Any]]):
         """Add papers to vector database"""
@@ -440,13 +502,29 @@ class PersistentMemory:
         
         # Add to database
         if final_ids:
-            embeddings = self.embedding_fn.encode(final_docs).tolist()
-            self.collection.add(
-                ids=final_ids,
-                embeddings=embeddings,
-                documents=final_docs,
-                metadatas=final_metas
-            )
+            # embeddings = self.embedding_fn.encode(final_docs).tolist()
+            embeddings = self.embeddings.embed_documents(final_docs)
+            try:
+                self.collection.add(
+                    ids=final_ids,
+                    embeddings=embeddings,
+                    documents=final_docs,
+                    metadatas=final_metas
+                )
+            except Exception as e:
+                if "dimension" in str(e).lower():
+                    print(f"⚠️ Dimension mismatch detected during add: {e}")
+                    self._force_migration()
+                    # Retry add
+                    self.collection.add(
+                        ids=final_ids,
+                        embeddings=embeddings,
+                        documents=final_docs,
+                        metadatas=final_metas
+                    )
+                else:
+                    raise e
+
     
     def query(self, topic: str, n: int = 20) -> Dict[str, Any]:
         """
@@ -459,6 +537,18 @@ class PersistentMemory:
         Returns:
             ChromaDB query results with ids, distances, metadatas, documents
         """
-        q_vec = self.embedding_fn.encode([topic]).tolist()
-        results = self.collection.query(query_embeddings=q_vec, n_results=n)
+        # q_vec = self.embedding_fn.encode([topic]).tolist()
+        q_vec = self.embeddings.embed_query(topic)
+        try:
+            results = self.collection.query(query_embeddings=[q_vec], n_results=n)
+        except Exception as e:
+            if "dimension" in str(e).lower():
+                print(f"⚠️ Dimension mismatch detected during query: {e}")
+                self._force_migration()
+                # Retry query
+                results = self.collection.query(query_embeddings=[q_vec], n_results=n)
+            else:
+                raise e
         return results
+
+

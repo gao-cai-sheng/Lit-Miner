@@ -5,6 +5,30 @@ All notable changes to Lit-Miner will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-12-26
+
+### 🤖 Core Intelligence Upgrade
+- **Unified LLM Client**: New architecture seamlessly manages interactions between DeepSeek (Writing/Reasoning) and Google Gemini (Embeddings/Judging).
+- **RAG Engine Overhaul**: Switched from local SentenceTransformers to **Gemini Text-Embedding-004**, upgrading dimension from 384d to 768d for deeper semantic understanding.
+- **Auto-Migration**: Vector database automatically detects version mismatches and triggers migration (safe rebuild) to prevent crashes.
+
+### 🧹 Data Quality & PDF
+- **Reference Filtering**: PDF extraction algorithms now intelligently detect and truncate "References/Bibliography" sections.
+  - *Impact*: Stops the chatbot from "retrieving citations" instead of actual content.
+  - *Result*: Retrieval precision improved significantly.
+- **Context Optimization**: Increased RAG context window from 300 to 1500 characters, giving the AI 5x more information to answer questions.
+
+### 💬 Chatbot & Evaluation
+- **Evaluation Framework**: Added `evaluate_chatbot.py`, an "LLM-as-a-Judge" system to score retrieval quality and answer fidelity.
+- **Stability**: Fixed circular imports in `core.miners` and added robust retry logic for API 500 errors.
+
+### 🐛 Bug Fixes
+- Fixed `IndentationError` in SmartMiner that prevented startup.
+- Fixed UI crash when vector DB directory was missing.
+- Fixed `Gemini API` deprecation warnings by preparing for future `google-genai` migration.
+
+---
+
 ## [2.0.1] - 2025-12-20
 
 ### 🛡️ Quality Assurance Features

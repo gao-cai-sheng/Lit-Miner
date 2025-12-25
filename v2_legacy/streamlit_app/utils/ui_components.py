@@ -3,7 +3,11 @@ Reusable UI Components for Streamlit
 """
 
 import streamlit as st
+import os
 from typing import Dict, List
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def display_paper_card(paper: Dict, index: int):
@@ -92,20 +96,37 @@ def sidebar_settings():
         st.header("⚙️ Settings")
         
         # Email for PubMed
+        default_email = os.getenv("PUBMED_EMAIL", "your_email@example.com")
         email = st.text_input(
             "PubMed Email",
-            value=st.session_state.get("user_email", "your_email@example.com"),
-            help="Required for PubMed API access"
+            value=st.session_state.get("user_email", default_email),
+            help="Required for PubMed API access (defaults to PUBMED_EMAIL in .env)"
         )
+
         st.session_state["user_email"] = email
         
-        # API Key for DeepSeek
+        # API Key for Gemini (Priority 1)
+        default_gemini = os.getenv("GEMINI_API_KEY", "")
+        gemini_key = st.text_input(
+            "Gemini API Key (Priority 1)",
+            value=st.session_state.get("gemini_key", default_gemini),
+            type="password",
+            help="Google Gemini API Key (Preferred)"
+        )
+
+        st.session_state["gemini_key"] = gemini_key
+
+        # API Key for DeepSeek (Priority 2)
+
+        # API Key for DeepSeek (Priority 2)
+        default_deepseek = os.getenv("DEEPSEEK_API_KEY", "")
         api_key = st.text_input(
-            "DeepSeek API Key",
-            value=st.session_state.get("api_key", ""),
+            "DeepSeek API Key (Priority 2)",
+            value=st.session_state.get("api_key", default_deepseek),
             type="password",
             help="Load from .env or enter manually"
         )
+
         st.session_state["api_key"] = api_key
         
         st.divider()
@@ -121,7 +142,8 @@ def sidebar_settings():
             for q in queries[-5:]:
                 st.caption(f"• {q}")
         
-    return {"email": email, "api_key": api_key}
+    return {"email": email, "api_key": api_key, "gemini_key": gemini_key}
+
 
 
 def error_display(error: Exception):
