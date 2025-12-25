@@ -16,3 +16,5 @@ pdf2image
 opencv-python
 torch
 torchvision
+python-pptx==1.0.2
+PyMuPDF==1.26.7
