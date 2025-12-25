@@ -25,7 +25,27 @@ st.set_page_config(
 )
 
 # Render sidebar
+# Render sidebar
 config = sidebar_settings()
+
+# Review Memory Sidebar
+try:
+    from core.memory.query_history import QueryHistory
+    history = QueryHistory().get_entries(limit=10)
+    
+    if history:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🧠 Review Memory")
+        
+        for entry in history:
+            with st.sidebar.expander(f"📅 {entry['timestamp'][:10]} - {entry['query'][:20]}..."):
+                st.caption(f"**Query:** {entry['query']}")
+                st.caption(f"**Papers:** {entry['papers_count']}")
+                st.caption(f"**Time:** {entry['timestamp']}")
+                if entry.get('tags'):
+                    st.caption(f"**Tags:** {', '.join(entry['tags'])}")
+except Exception as e:
+    print(f"Memory display error: {e}")
 
 # Main content
 st.title("✍️ AI Review Generation")

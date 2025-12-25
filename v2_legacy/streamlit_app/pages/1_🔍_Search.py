@@ -99,6 +99,19 @@ if submitted:
             st.session_state["search_results"] = papers
             st.session_state["current_query"] = query
             
+            # Save to Memory
+            try:
+                from core.memory.query_history import QueryHistory
+                # Extract simple tags from papers (e.g. top 3 categories)
+                tags = list(set([p.get('category', 'General') for p in papers[:10]]))[:3]
+                QueryHistory().add_entry(
+                    query=query,
+                    papers_count=len(papers),
+                    tags=tags
+                )
+            except Exception as e:
+                print(f"Failed to save history: {e}")
+            
             # Success message
             st.success(f"✅ Found and stored {len(papers)} papers!")
             
