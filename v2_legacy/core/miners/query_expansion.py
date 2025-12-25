@@ -7,7 +7,9 @@ import re
 import json
 import requests
 from typing import Dict, Optional
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, PROMPTS, QUERY_EXPANSION_CONFIG
+
+# ...
 
 
 # Simple cache to avoid repeated API calls for same queries
@@ -60,49 +62,14 @@ def expand_query(user_query: str, use_ai: bool = True) -> str:
 def _expand_with_ai(query: str, has_chinese: bool = False) -> str:
     """
     Use DeepSeek API to intelligently expand query.
-    
-    Args:
-        query: User query (any language)
-        has_chinese: Whether query contains Chinese characters
-        
-    Returns:
-        Expanded PubMed Boolean query
     """
     if has_chinese:
-        prompt = f"""You are a medical literature search expert. Convert the following Chinese medical query into an optimized PubMed Boolean search query.
-
-Requirements:
-1. Translate Chinese terms to English medical terminology
-2. Include common synonyms and variations
-3. Include relevant abbreviations (e.g., "TBI" for "traumatic brain injury")
-4. Use Boolean operators: OR for synonyms, AND for different concepts
-5. Use quotes for exact phrases
-6. Output ONLY the PubMed search query, no explanations
-
-Example:
-Input: 牙周炎治疗
-Output: ("periodontitis" OR "chronic periodontitis" OR "periodontal disease") AND ("treatment" OR "therapy" OR "intervention")
-
-Now process this query:
-Input: {query}
-Output:"""
+        template = PROMPTS.get("query_expansion", {}).get("chinese_to_pubmed", "")
+        # Fallback if empty (omitted for brevity, reliable config assumed from previous step)
+        prompt = template.format(query=query)
     else:
-        prompt = f"""You are a medical literature search expert. Optimize the following medical query for PubMed search.
-
-Requirements:
-1. Add relevant medical synonyms and variations
-2. Include common abbreviations
-3. Use Boolean operators: OR for synonyms, AND for different concepts
-4. Use quotes for exact phrases
-5. Output ONLY the PubMed search query, no explanations
-
-Example:
-Input: brain injury recovery
-Output: ("traumatic brain injury" OR "TBI" OR "brain trauma") AND ("recovery" OR "rehabilitation" OR "functional outcome")
-
-Now process this query:
-Input: {query}
-Output:"""
+        template = PROMPTS.get("query_expansion", {}).get("english_optimization", "")
+        prompt = template.format(query=query)
     
     try:
         headers = {

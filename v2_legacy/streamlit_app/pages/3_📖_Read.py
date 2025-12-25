@@ -11,6 +11,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from utils.local_pdf_processor import process_local_pdf
+from core.generators.content_extractor import ContentExtractor
+from core.generators.ppt_generator import PPTGenerator
 
 st.set_page_config(
     page_title="Read - Lit-Miner",
@@ -18,127 +20,137 @@ st.set_page_config(
     layout="wide"
 )
 
+
+# Sidebar Configuration
+with st.sidebar:
+    st.header("⚙️ Settings")
+    api_key = st.text_input("DeepSeek API Key", type="password", help="Required for PPT content analysis")
+    if api_key:
+        os.environ["DEEPSEEK_API_KEY"] = api_key
+    
+    st.divider()
+    st.markdown("### 🛠️ Functionality")
+    st.info("Upload a PDF to start.")
+
+# Main Layout
 st.title("📖 Read - PDF Intelligent Extraction")
 st.markdown("""
-Upload a PDF and let AI extract structured content:
-- 📝 Text → Markdown file
-- 🖼️ Figures → Separate images
-- 📊 Tables → Separate images
+Upload a PDF to extract text, figures, and generate a PowerPoint report.
 """)
 
-# Upload section
-st.divider()
-st.markdown("### 📤 Upload PDF")
-
-uploaded_file = st.file_uploader(
-    "Choose a PDF file",
-    type=['pdf'],
-    help="Upload an academic paper or document for AI-powered extraction"
-)
+uploaded_file = st.file_uploader("Upload PDF", type=['pdf'], label_visibility="collapsed")
 
 if uploaded_file:
-    # Display file info
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Filename", uploaded_file.name)
-    with col2:
-        st.metric("Size", f"{uploaded_file.size / 1024:.1f} KB")
-    with col3:
-        st.metric("Type", uploaded_file.type)
+    # Display file info in a concise way
+    st.info(f"📄 **{uploaded_file.name}** ({uploaded_file.size / 1024:.1f} KB)")
     
     # Process button
-    st.divider()
     if st.button("🤖 Start AI Extraction", type="primary", use_container_width=True):
         try:
             with st.spinner("AI model processing... This may take a minute."):
                 result = process_local_pdf(uploaded_file)
             
             st.success(f"✅ Extraction complete! Processed {result.num_pages} pages")
-            
-            # Store in session state
             st.session_state['processed_result'] = result
             
         except Exception as e:
             st.error(f"❌ Processing failed: {str(e)}")
-            st.info("💡 Please check the PDF and try again")
 
-# Display results if available
+
 if 'processed_result' in st.session_state:
     result = st.session_state['processed_result']
     
     st.divider()
-    st.markdown("### 📊 Extraction Results")
+    
+    # --- Top Control Bar: Report Generation ---
+    col_kpi1, col_kpi2 = st.columns([3, 1])
+    with col_kpi1:
+        st.markdown(f"### 📊 Analysis Results ({len(result.markdown)} chars, {len(result.figures)+len(result.tables)} images)")
+    with col_kpi2:
+        if st.button("🚀 Generate PPT", type="primary", use_container_width=True, help="Convert to PowerPoint"):
+             # Logic for PPT generation (will implement inside a function or check session state trigger to avoid re-run issues)
+             # Ideally we set a flag here or run it immediately
+             st.session_state['trigger_ppt'] = True
+
+    # Handle PPT Trigger
+    if st.session_state.get('trigger_ppt'):
+        try:
+            if not os.environ.get("DEEPSEEK_API_KEY"):
+                st.warning("⚠️ Please enter your DeepSeek API Key in the sidebar first!")
+            else:
+                with st.spinner("🤖 Analyzing & Generating PPT..."):
+                    extractor = ContentExtractor()
+                    paper_data = extractor.extract_from_text(result.markdown)
+                    paper_data["title"] = paper_data.get("title", uploaded_file.name.replace(".pdf", ""))
+                    
+                    all_images = result.figures + result.tables
+                    ppt_gen = PPTGenerator()
+                    
+                    output_dir = "data/reports"
+                    os.makedirs(output_dir, exist_ok=True)
+                    output_path = os.path.join(output_dir, f"Report_{uploaded_file.name.replace('.pdf', '')}.pptx")
+                    
+                    ppt_gen.create_report(paper_data, output_path, images=all_images)
+                    
+                    st.success("✅ PPT Ready!")
+                    with open(output_path, "rb") as f:
+                        st.download_button(
+                            label="📥 Download .pptx",
+                            data=f,
+                            file_name=os.path.basename(output_path),
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            use_container_width=True
+                        )
+                    # Reset trigger to avoid loop? Or keep it to show download button
+                    # st.session_state['trigger_ppt'] = False 
+        except Exception as e:
+             st.error(f"PPT Generation failed: {e}")
+
+    st.divider()
     
     # Layout: left for text, right for images/tables
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("#### 📝 Extracted Text")
-        
-        # Show preview
-        with st.expander("📄 Preview Markdown", expanded=True):
+        # Collapsed by default
+        with st.expander("📄 View Markdown Content", expanded=False):
             st.markdown(result.markdown)
-        
-        # Download markdown
-        st.download_button(
-            "💾 Download Markdown",
-            data=result.markdown,
-            file_name=f"{result.pdf_id}_content.md",
-            mime="text/markdown",
-            use_container_width=True
-        )
-        
-        # Show stats
-        st.caption(f"📊 Stats: {len(result.markdown)} characters, {result.num_pages} pages")
+            st.download_button("💾 Save MD", result.markdown, f"{result.pdf_id}.md")
     
     with col2:
-        # Figures
-        if result.figures:
-            st.markdown(f"#### 🖼️ Figures ({len(result.figures)})")
-            for idx, fig_path in enumerate(result.figures):
-                if os.path.exists(fig_path):
-                    try:
-                        st.image(fig_path, caption=f"Figure {idx+1}", use_container_width=True)
-                        with open(fig_path, "rb") as f:
-                            st.download_button(
-                                f"💾 Download Fig {idx+1}",
-                                data=f.read(),
-                                file_name=os.path.basename(fig_path),
-                                mime="image/png",
-                                key=f"fig_{idx}",
-                                use_container_width=True
-                            )
-                    except Exception as e:
-                        st.error(f"Error displaying figure {idx+1}: {str(e)}")
-                        st.caption(f"Path: {fig_path}")
-                else:
-                    st.warning(f"Figure {idx+1} file not found: {fig_path}")
+        # Figures & Tables
+        images = result.figures + result.tables
+        if images:
+             st.markdown(f"#### 🖼️ Figures & Tables ({len(images)})")
+             
+             # Batch download button
+             import zipfile
+             import io
+             
+             zip_buffer = io.BytesIO()
+             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                 for idx, img_path in enumerate(images):
+                     if os.path.exists(img_path):
+                         zip_file.write(img_path, os.path.basename(img_path))
+             
+             st.download_button(
+                 "📦 Download All Images (ZIP)",
+                 data=zip_buffer.getvalue(),
+                 file_name=f"{result.pdf_id}_images.zip",
+                 mime="application/zip",
+                 use_container_width=True
+             )
+             
+             st.divider()
+             
+             # Show mini grid
+             img_cols = st.columns(2)
+             for idx, img_path in enumerate(images):
+                 if os.path.exists(img_path):
+                     img_cols[idx % 2].image(img_path, caption=f"Img {idx+1}", use_container_width=True)
         else:
-            st.info("🖼️ No figures detected")
-        
-        # Tables
-        if result.tables:
-            st.markdown(f"#### 📊 Tables ({len(result.tables)})")
-            for idx, tbl_path in enumerate(result.tables):
-                if os.path.exists(tbl_path):
-                    try:
-                        st.image(tbl_path, caption=f"Table {idx+1}", use_container_width=True)
-                        with open(tbl_path, "rb") as f:
-                            st.download_button(
-                                f"💾 Download Table {idx+1}",
-                                data=f.read(),
-                                file_name=os.path.basename(tbl_path),
-                                mime="image/png",
-                                key=f"tbl_{idx}",
-                                use_container_width=True
-                            )
-                    except Exception as e:
-                        st.error(f"Error displaying table {idx+1}: {str(e)}")
-                        st.caption(f"Path: {tbl_path}")
-                else:
-                    st.warning(f"Table {idx+1} file not found: {tbl_path}")
-        else:
-            st.info("📊 No tables detected")
+             st.info("No images detected")
 
 # Usage tips
 st.divider()

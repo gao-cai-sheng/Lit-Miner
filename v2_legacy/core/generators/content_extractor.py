@@ -1,4 +1,5 @@
 
+
 import os
 import json
 from typing import Dict, Optional
@@ -6,6 +7,8 @@ import sys
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from config import PROMPTS
 
 try:
     from openai import OpenAI
@@ -27,28 +30,30 @@ class ContentExtractor:
         """
         Extract structured content from paper text for PPT generation
         """
-        prompt = """
-        You are a medical research assistant. Extract key information from the following paper text for a presentation.
-        Output MUST be valid JSON with these keys: 
-        - title (The official title of the paper)
-        - background (Problem statement, hypothesis)
-        - methods (Study design, sample size, intervention)
-        - results (Key findings, statistics)
-        - conclusion (Clinical implications)
-        
-        Keep content concise, suitable for bullet points in a PPT slide.
-        Language: Chinese (Respond in Chinese)
-        
-        Paper Data:
-        {text}
-        """
+        prompt_template = PROMPTS.get("report_generator", {}).get("extraction", "")
+        if not prompt_template:
+            # Fallback if config fails
+            prompt_template = """
+            You are a medical research assistant. Extract key information from the following paper text for a presentation.
+            Output MUST be valid JSON with these keys: 
+            - title (The official title of the paper)
+            - background (Problem statement, hypothesis)
+            - methods (Study design, sample size, intervention)
+            - results (Key findings, statistics)
+            - conclusion (Clinical implications)
+            
+            Paper Data:
+            {text}
+            """
+            
+        prompt = prompt_template.format(text=text[:10000])
         
         try:
             response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant that outputs JSON."},
-                    {"role": "user", "content": prompt.format(text=text[:10000])} # Truncate to avoid token limit
+                    {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.3

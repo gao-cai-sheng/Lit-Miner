@@ -9,7 +9,7 @@ class PPTGenerator:
     def __init__(self, template_path: Optional[str] = None):
         self.prs = Presentation(template_path) if template_path and os.path.exists(template_path) else Presentation()
         
-    def create_report(self, paper_data: Dict, output_path: str):
+    def create_report(self, paper_data: Dict, output_path: str, images: List[str] = None):
         """
         Generate a PPT report for a single paper
         
@@ -41,10 +41,77 @@ class PPTGenerator:
         
         # 5. Conclusion
         self._add_content_slide("结论与临床意义", paper_data.get("conclusion", "N/A"))
+
+        # 6. Figures (Disabled - user preference)
+        # if images:
+        #     self._add_images_slide("图表 (部分)", images)
         
         # Save
         self.prs.save(output_path)
         return output_path
+
+    def _add_images_slide(self, title_text: str, image_paths: List[str]):
+        """Add slides with multiple images (up to 4 per slide)"""
+        
+        # Batch images into groups of 4
+        chunk_size = 4
+        image_chunks = [image_paths[i:i + chunk_size] for i in range(0, len(image_paths), chunk_size)]
+        
+        for idx, chunk in enumerate(image_chunks):
+            slide = self.prs.slides.add_slide(self.prs.slide_layouts[1]) # Title and Content
+            
+            # Clear existing content placeholder if any
+            for shape in slide.placeholders:
+                 if shape.placeholder_format.idx == 1:
+                     sp = shape.element
+                     sp.getparent().remove(sp)
+    
+            title = slide.shapes.title
+            
+            # Add numbering if multiple slides
+            if len(image_chunks) > 1:
+                title.text = f"{title_text} ({idx+1}/{len(image_chunks)})"
+            else:
+                title.text = title_text
+            
+            # Slide size defaults: 10x7.5 inches
+            margin_left = Inches(0.5)
+            margin_top = Inches(1.5)
+            
+            # Grid dimensions
+            grid_width = Inches(9)
+            grid_height = Inches(5.5)
+            
+            # Calculate cell size based on number of images
+            # We assume max 4 images (2x2)
+            cell_width = grid_width / 2
+            cell_height = grid_height / 2
+            
+            for i, img_path in enumerate(chunk):
+                try:
+                    # 2x2 Grid positions
+                    row = i // 2
+                    col = i % 2
+                    
+                    left = margin_left + (col * cell_width)
+                    top = margin_top + (row * cell_height)
+                    
+                    # Add picture
+                    # We slightly reduce size to leave a gap
+                    pic = slide.shapes.add_picture(img_path, left, top, width=cell_width - Inches(0.2))
+                    
+                    # Check if height exceeds cell
+                    if pic.height > (cell_height - Inches(0.2)):
+                         # resizing based on height
+                         ratio = pic.width / pic.height
+                         pic.height = cell_height - Inches(0.2)
+                         pic.width = pic.height * ratio
+                         
+                    # Center the image in the cell if simpler
+                    # (Current logic aligns to top-left of cell, which is acceptable)
+                         
+                except Exception as e:
+                    print(f"Error adding image {img_path}: {e}")
 
     def _add_title_slide(self, data: Dict):
         """Add title slide with paper metadata"""
@@ -84,9 +151,9 @@ if __name__ == "__main__":
         "title": "Effect of Socket Preservation",
         "authors": "Smith et al.",
         "journal": "J Periodontol 2024",
-        "background": "Alveolar ridge resorption is a common problem...",
-        "methods": "RCT with 50 patients...",
-        "results": "Significant reduction in bone loss...",
+        "background": "Alveolar ridge resorption...",
+        "methods": "RCT...",
+        "results": "Significant reduction...",
         "conclusion": "Socket preservation is recommended."
     }
     gen.create_report(test_data, "test_report.pptx")

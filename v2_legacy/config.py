@@ -15,6 +15,7 @@ PUBMED_EMAIL = os.getenv("PUBMED_EMAIL", "your_email@example.com")
 
 # === Directory Configuration ===
 BASE_DIR = Path(__file__).parent
+PROJECT_ROOT = BASE_DIR
 DATA_DIR = BASE_DIR / "data"
 VECTOR_DB_DIR = DATA_DIR / "vector_dbs"
 PDF_DIR = DATA_DIR / "pdfs"
@@ -28,6 +29,24 @@ for dir_path in [DATA_DIR, VECTOR_DB_DIR, PDF_DIR, PROCESSED_DIR]:
 USE_AI_EXPANSION = True  # Enable/disable AI-powered query expansion
 AI_EXPANSION_TIMEOUT = 10  # Timeout for AI API calls (seconds)
 AI_EXPANSION_CACHE_ENABLED = True  # Enable caching for repeated queries
+
+# === Query Expansion Rules (Legacy) ===
+QUERY_EXPANSION_CONFIG = {
+    "diseases": {
+        "牙周炎": '("periodontitis"[MeSH Terms] OR "periodontitis"[Title/Abstract] OR "periodontal disease"[Title/Abstract])',
+        "种植体周围炎": '("peri-implantitis"[MeSH Terms] OR "peri-implantitis"[Title/Abstract])',
+        "骨缺损": '("bone defects"[MeSH Terms] OR "alveolar bone loss"[Title/Abstract] OR "bony defect"[Title/Abstract])',
+    },
+    "procedures": {
+        "位点保存": '("socket preservation"[Title/Abstract] OR "alveolar ridge preservation"[Title/Abstract] OR "extraction socket"[Title/Abstract])',
+        "GBR": '("guided bone regeneration"[Title/Abstract] OR "GBR"[Title/Abstract] OR "bone regeneration"[MeSH Terms])',
+        "种植": '("dental implants"[MeSH Terms] OR "dental implantation"[MeSH Terms] OR "implant"[Title/Abstract])',
+    },
+    "outcomes": {
+        "骨结合": '("osseointegration"[MeSH Terms] OR "bone-implant interaction"[Title/Abstract])',
+        "成功率": '("survival rate"[Title/Abstract] OR "success rate"[Title/Abstract] OR "failure"[Title/Abstract])',
+    }
+}
 
 # === Mining Configuration - Rubric Scoring System ===
 # Journal rankings and scoring weights moved to private file for security
@@ -77,3 +96,12 @@ MAX_SEARCH_LIMIT = 500  # Maximum allowed search limit
 # === Logging Configuration ===
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# === Prompt Configuration ===
+try:
+    import yaml
+    with open(BASE_DIR / "config/prompts.yaml", "r", encoding="utf-8") as f:
+        PROMPTS = yaml.safe_load(f)
+except Exception as e:
+    print(f"⚠️ Warning: Failed to load config/prompts.yaml: {e}")
+    PROMPTS = {}
