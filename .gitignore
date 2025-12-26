@@ -1,9 +1,10 @@
+
 # Global ignores
 .DS_Store
 Thumbs.db
 *.log
 
-# Virtual Environments (in any subdirectory)
+# Virtual Environments
 .venv/
 venv/
 env/
@@ -12,3 +13,17 @@ ENV/
 # Python
 __pycache__/
 *.py[cod]
+
+# Security (CRITICAL)
+.env
+**/.env
+**/.DS_Store
+
+# Runtime Data
+data/
+v2_legacy/data/
+**/__pycache__/
+query_history.json
+conversations/
+reports/
+output/

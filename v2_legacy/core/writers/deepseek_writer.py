@@ -6,7 +6,9 @@ Uses DeepSeek API to generate comprehensive reviews from RAG-retrieved papers
 import requests
 from typing import Dict, Any, Optional
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, PROMPTS
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, GEMINI_API_KEY, PROMPTS
+from core.llm.llm_client import LLMClient
+
 
 
 class DeepSeekWriter:
@@ -14,18 +16,20 @@ class DeepSeekWriter:
     AI-powered literature review writer using DeepSeek Chat API
     """
     
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
+    
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, gemini_key: Optional[str] = None):
         """
         Args:
             api_key: DeepSeek API key (uses config if not provided)
             base_url: API base URL (uses config if not provided)
+            gemini_key: Gemini API Key (uses config if not provided)
         """
         self.api_key = api_key or DEEPSEEK_API_KEY
+        self.gemini_key = gemini_key or GEMINI_API_KEY
         self.base_url = base_url or DEEPSEEK_BASE_URL
-        self.model_name = "deepseek-chat"
         
-        if not self.api_key:
-            raise RuntimeError("DeepSeek API key not configured. Set DEEPSEEK_API_KEY in .env")
+        self.client = LLMClient(gemini_key=self.gemini_key, deepseek_key=self.api_key)
+
     
     def generate_review(
         self,
@@ -56,28 +60,14 @@ class DeepSeekWriter:
         
         # Call API
         try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
-            
-            resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                json=data,
-                headers=headers,
-                timeout=120
+            return self.client.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
             )
-            resp.raise_for_status()
             
-            result = resp.json()
-            text = result["choices"][0]["message"]["content"]
-            return text
+        except Exception as e:
+            return f"❌ Review generation failed: {e}"
+
             
         except Exception as e:
             return f"❌ Review generation failed: {e}"
@@ -126,8 +116,10 @@ class DeepSeekWriter:
 def generate_topic_from_evidence(
     evidence: Dict[str, Any],
     api_key: str,
-    base_url: str
+    base_url: str,
+    gemini_key: Optional[str] = None
 ) -> str:
+
     """
     Auto-generate review topic from evidence.
     
@@ -148,29 +140,18 @@ def generate_topic_from_evidence(
     template = PROMPTS.get("review_writer", {}).get("topic_summary", "")
     summary_prompt = template.format(titles="\n".join(titles))
     
+    
     try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": summary_prompt}],
-            "max_tokens": 100
-        }
-        
-        resp = requests.post(
-            f"{base_url}/chat/completions",
-            json=data,
-            headers=headers,
-            timeout=30
-        )
-        
-        if resp.status_code == 200:
-            generated = resp.json()["choices"][0]["message"]["content"].strip()
-            return generated.strip('"').strip("'")
-        else:
-            return "Literature Review on Clinical Outcomes"
+        client = LLMClient(gemini_key=gemini_key, deepseek_key=api_key)
+        return client.chat_completion(
+            messages=[{"role": "user", "content": summary_prompt}],
+            temperature=0.7,
+            max_tokens=100
+        ).strip('"\'')
+            
+    except Exception:
+        return "Literature Review"
+
             
     except Exception:
         return "Literature Review"

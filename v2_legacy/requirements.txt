@@ -3,7 +3,8 @@ biopython
 openai
 sentence-transformers
 chromadb
-deepseek-api
+google-generativeai
+
 requests
 beautifulsoup4
 matplotlib

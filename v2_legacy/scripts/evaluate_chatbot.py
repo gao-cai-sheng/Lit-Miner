@@ -34,28 +34,38 @@ def evaluate():
     questions = [
         {
             "id": 1,
-            "q": "What are the primary pathogens associated with periodontitis?",
-            "concepts": ["Porphyromonas gingivalis", "Tannerella forsythia", "Treponema denticola", "red complex"]
+            "q": "What are the clinical endpoints for successful active periodontal therapy?",
+            "concepts": ["probing depth", "bleeding on probing", "closure of pockets", "Loos", "4mm"]
         },
         {
             "id": 2,
-            "q": "How does diabetes mellitus affect periodontal health?",
-            "concepts": ["bidirectional", "inflammation", "delayed healing", "glucose"]
+            "q": "Is the use of systemic antimicrobials recommended as an adjunct to subgingival instrumentation?",
+            "concepts": ["Teughels", "systemic antibiotics", "metronidazole", "amoxicillin", "benefit"]
         },
          {
             "id": 3,
-            "q": "What is the clinical definition of peri-implantitis?",
-            "concepts": ["inflammation", "bone loss", "bleeding on probing", "implants"]
+            "q": "How effective are adjunctive measures in treating peri-implant mucositis?",
+            "concepts": ["Gennai", "bleeding on probing", "plaque control", "antiseptics", "probiotics"]
         },
         {
             "id": 4,
-            "q": "What are the advantages of local drug delivery in periodontics?",
-            "concepts": ["concentration", "side effects", "compliance", "site-specific"]
+            "q": "What are the risk factors associated with periodontitis progression?",
+            "concepts": ["smoking", "diabetes", "plaque", "risk factor control"]
         },
         {
             "id": 5,
-            "q": "Describe the Guided Tissue Regeneration (GTR) principle.",
-            "concepts": ["barrier membrane", "exclude epithelium", "regeneration", "periodontal ligament"]
+            "q": "Does orthodontic therapy have a detrimental effect on periodontal health in patients with periodontitis?",
+            "concepts": ["Martin", "orthodontic treatment", "stable periodontium", "no detrimental effect", "recurrence"]
+        },
+        {
+            "id": 6,
+            "q": "Is chemical decontamination effective for implant surfaces during surgical treatment of peri-implantitis?",
+            "concepts": ["Wilensky", "chemical agents", "mechanical debridement", "no additional benefit", "surgical"]
+        },
+        {
+            "id": 7,
+            "q": "Which adjunctive therapies show benefit in non-surgical periodontal treatment?",
+            "concepts": ["Linares", "lasers", "photodynamic therapy", "chlorhexidine", "probiotics"]
         }
     ]
 

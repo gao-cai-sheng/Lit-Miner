@@ -126,8 +126,10 @@ if submitted:
                 query=query,
                 topic=topic if topic.strip() else None,
                 n_results=n_results,
+                gemini_key=config.get("gemini_key"),
                 log_callback=log_callback
             )
+
             
             progress.progress(100, text="Complete!")
             

@@ -15,7 +15,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from core.miners import SmartMiner, PersistentMemory, expand_query
+from core.miners.smart_miner import SmartMiner, PersistentMemory
+from core.miners.query_expansion import expand_query
 from core.writers import DeepSeekWriter, generate_topic_from_evidence
 from config import PUBMED_EMAIL
 
@@ -25,7 +26,8 @@ convert_pdf_to_markdown = None
 FigureProcessor = None
 
 
-def run_smart_mining(query: str, limit: int, email: str, log_callback: Optional[Callable] = None) -> List[Dict]:
+def run_smart_mining(query: str, limit: int, email: str, gemini_key: Optional[str] = None, log_callback: Optional[Callable] = None) -> List[Dict]:
+
     """
     Run smart mining with progress logging.
     
@@ -39,7 +41,8 @@ def run_smart_mining(query: str, limit: int, email: str, log_callback: Optional[
         List of paper dictionaries
     """
     # Expand query
-    expanded_query = expand_query(query)
+    expanded_query = expand_query(query, gemini_key=gemini_key)
+
     if log_callback:
         log_callback(f"🔍 Expanded query: {expanded_query[:150]}...")
     
@@ -88,6 +91,7 @@ def generate_ai_review(
     query: str,
     topic: str = "",
     n_results: int = 20,
+    gemini_key: Optional[str] = None,
     log_callback: Optional[Callable] = None
 ) -> Dict:
     """
@@ -161,12 +165,15 @@ def generate_ai_review(
         if log_callback:
             log_callback("🧠 Auto-generating topic from papers...")
         try:
-            writer_temp = DeepSeekWriter()
+            writer_temp = DeepSeekWriter(gemini_key=gemini_key)
             final_topic = generate_topic_from_evidence(
                 evidence,
                 writer_temp.api_key,
-                writer_temp.base_url
+                writer_temp.base_url,
+                gemini_key=gemini_key
             )
+
+
             if log_callback:
                 log_callback(f"✅ Generated topic: {final_topic}")
         except Exception as e:
@@ -178,7 +185,9 @@ def generate_ai_review(
     if log_callback:
         log_callback("✍️ Generating review with DeepSeek...")
     
-    writer = DeepSeekWriter()
+    writer = DeepSeekWriter(gemini_key=gemini_key)
+
+
     markdown = writer.generate_review(
         topic=final_topic,
         evidence=evidence,

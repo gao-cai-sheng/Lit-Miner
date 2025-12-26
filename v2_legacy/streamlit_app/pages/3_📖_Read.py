@@ -13,6 +13,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from utils.local_pdf_processor import process_local_pdf
 from core.generators.content_extractor import ContentExtractor
 from core.generators.ppt_generator import PPTGenerator
+from core.chatbot.gemini_embeddings import GeminiEmbeddings
+import chromadb
+from chromadb.config import Settings
+from config import VECTOR_DB_DIR
+
 
 st.set_page_config(
     page_title="Read - Lit-Miner",
@@ -151,6 +156,85 @@ if 'processed_result' in st.session_state:
                      img_cols[idx % 2].image(img_path, caption=f"Img {idx+1}", use_container_width=True)
         else:
              st.info("No images detected")
+
+    
+    # --- Add to Knowledge Base Section ---
+    st.divider()
+    st.markdown("#### 🧠 Knowledge Base Integration")
+    
+    col_kb1, col_kb2 = st.columns([3, 1])
+    with col_kb1:
+        st.markdown("""
+        Add this document to the **Chatbot Knowledge Base** to ask questions about it.
+        *Creates embeddings and stores in vector database.*
+        """)
+    with col_kb2:
+        if st.button("📥 Add to Knowledge Base", type="secondary", use_container_width=True):
+            try:
+                with st.spinner("Chunking and Embedding..."):
+                    # 1. Chunking Logic (Simplified)
+                    text = result.markdown
+                    chunk_size = 500
+                    overlap = 50
+                    chunks = []
+                    start = 0
+                    chunk_id = 0
+                    
+                    base_metadata = {
+                        "filename": os.path.basename(result.pdf_path),
+                        "pdf_id": result.pdf_id,
+                        "title": result.pdf_id, # Fallback title
+                        "source": "Read_Page_Upload"
+                    }
+
+                    while start < len(text):
+                        end = start + chunk_size
+                        chunk_text = text[start:end]
+                        if end < len(text):
+                            last_period = chunk_text.rfind('。')
+                            if last_period == -1: last_period = chunk_text.rfind('.')
+                            if last_period > chunk_size * 0.5:
+                                end = start + last_period + 1
+                                chunk_text = text[start:end]
+                        
+                        chunks.append({
+                            "id": f"{result.pdf_id}_chunk_{chunk_id}",
+                            "text": chunk_text.strip(),
+                            "metadata": {**base_metadata, "chunk_id": chunk_id}
+                        })
+                        chunk_id += 1
+                        start = end - overlap
+                    
+                    if not chunks:
+                        st.warning("No text extracted to embed.")
+                    else:
+                         # 2. Embedding & Storage
+                         embeddings_client = GeminiEmbeddings()
+                         chroma_client = chromadb.PersistentClient(
+                             path=str(VECTOR_DB_DIR / "chatbot"),
+                             settings=Settings(anonymized_telemetry=False)
+                         )
+                         collection = chroma_client.get_or_create_collection(
+                             name="periodontal_core",
+                             metadata={"description": "Periodontal disease core literature (Gemini embeddings)"}
+                         )
+                         
+                         texts = [c["text"] for c in chunks]
+                         embeddings = embeddings_client.embed_documents(texts)
+                         
+                         collection.add(
+                             documents=texts,
+                             embeddings=embeddings,
+                             metadatas=[c["metadata"] for c in chunks],
+                             ids=[c["id"] for c in chunks]
+                         )
+                         
+                         st.success(f"✅ Added {len(chunks)} chunks to Knowledge Base!")
+                         st.balloons()
+                         
+            except Exception as e:
+                st.error(f"Failed to add to Knowledge Base: {e}")
+
 
 # Usage tips
 st.divider()

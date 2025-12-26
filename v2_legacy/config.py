@@ -10,6 +10,7 @@ load_dotenv()
 
 # === API Configuration ===
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 PUBMED_EMAIL = os.getenv("PUBMED_EMAIL", "your_email@example.com")
 
@@ -59,6 +60,7 @@ try:
         "recency_max_score": SCORING_WEIGHTS["recency_max_score"],
         "data_quality_bonus": SCORING_WEIGHTS["data_quality_bonus"],
     }
+    # raise ImportError("Debugging: Force fallback")
 except ImportError:
     # Fallback if private file is missing (e.g., fresh clone)
     print("⚠️  Warning: core/journal_rankings.py not found. Using minimal fallback configuration.")
@@ -75,7 +77,9 @@ except ImportError:
     }
 
 # === Embedding Model Configuration ===
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# Upgraded to multilingual model for better Chinese-English cross-lingual retrieval
+# EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+EMBEDDING_MODEL = "Gemini text-embedding-004" # Now using Gemini (via core.chatbot.gemini_embeddings)
 
 # === ChromaDB Configuration ===
 CHROMA_PERSIST_DIR = str(VECTOR_DB_DIR)

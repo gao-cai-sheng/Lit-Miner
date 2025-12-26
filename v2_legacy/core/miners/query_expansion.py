@@ -7,7 +7,9 @@ import re
 import json
 import requests
 from typing import Dict, Optional
-from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, PROMPTS, QUERY_EXPANSION_CONFIG
+from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, GEMINI_API_KEY, PROMPTS, QUERY_EXPANSION_CONFIG
+from core.llm.llm_client import LLMClient
+
 
 # ...
 
@@ -16,17 +18,17 @@ from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, PROMPTS, QUERY_EXPANSION
 _expansion_cache: Dict[str, str] = {}
 
 
-def expand_query(user_query: str, use_ai: bool = True) -> str:
+def expand_query(user_query: str, use_ai: bool = True, gemini_key: Optional[str] = None, deepseek_key: Optional[str] = None) -> str:
     """
     Expand user query using AI-powered intelligent expansion.
     
     Args:
         user_query: Raw search query (any language)
-        use_ai: If True, use DeepSeek API; if False, use legacy config-based expansion
-        
-    Returns:
-        Expanded PubMed search query
+        use_ai: If True, use LLMClient; if False, use legacy config-based expansion
+        gemini_key: Optional dynamic Gemini key
+        deepseek_key: Optional dynamic DeepSeek key
     """
+
     q = user_query.strip()
     if not q:
         return ""
@@ -39,11 +41,15 @@ def expand_query(user_query: str, use_ai: bool = True) -> str:
     has_chinese = bool(re.search(r"[\u4e00-\u9fff]", q))
     
     # Try AI expansion first (if enabled and API key available)
-    if use_ai and DEEPSEEK_API_KEY:
+    # Check either static config keys OR dynamic keys
+    has_keys = (DEEPSEEK_API_KEY or deepseek_key or GEMINI_API_KEY or gemini_key)
+    
+    if use_ai and has_keys:
         try:
-            expanded = _expand_with_ai(q, has_chinese=has_chinese)
+            expanded = _expand_with_ai(q, has_chinese=has_chinese, gemini_key=gemini_key, deepseek_key=deepseek_key)
             if expanded and expanded != q:
                 # Cache successful expansion
+
                 _expansion_cache[q] = expanded
                 return expanded
         except Exception as e:
@@ -59,63 +65,46 @@ def expand_query(user_query: str, use_ai: bool = True) -> str:
     return expanded
 
 
-def _expand_with_ai(query: str, has_chinese: bool = False) -> str:
+def _expand_with_ai(query: str, has_chinese: bool = False, gemini_key: Optional[str] = None, deepseek_key: Optional[str] = None) -> str:
     """
-    Use DeepSeek API to intelligently expand query.
+    Use Unified LLM Client (Gemini > DeepSeek) to intelligently expand query.
     """
+
     if has_chinese:
         template = PROMPTS.get("query_expansion", {}).get("chinese_to_pubmed", "")
-        # Fallback if empty (omitted for brevity, reliable config assumed from previous step)
         prompt = template.format(query=query)
     else:
         template = PROMPTS.get("query_expansion", {}).get("english_optimization", "")
         prompt = template.format(query=query)
     
     try:
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Use LLMClient with dynamic keys or fallback to global config
+        g_key = gemini_key or GEMINI_API_KEY
+        d_key = deepseek_key or DEEPSEEK_API_KEY
         
-        data = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.3,  # Lower temperature for more consistent results
-            "max_tokens": 300
-        }
+        client = LLMClient(gemini_key=g_key, deepseek_key=d_key)
         
-        response = requests.post(
-            f"{DEEPSEEK_BASE_URL}/chat/completions",
-            json=data,
-            headers=headers,
-            timeout=10  # 10 second timeout
+        expanded_query = client.chat_completion(
+
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=300
         )
+            
+        # Clean up the response (remove any markdown formatting, extra quotes, etc.)
+        expanded_query = expanded_query.strip('`"\'').strip()
         
-        if response.status_code == 200:
-            result = response.json()
-            expanded_query = result["choices"][0]["message"]["content"].strip()
-            
-            # Clean up the response (remove any markdown formatting, extra quotes, etc.)
-            expanded_query = expanded_query.strip('`"\'')
-            
-            # Validate that we got a reasonable query back
-            if len(expanded_query) > 0 and len(expanded_query) < 1000:
-                return expanded_query
-            else:
-                print(f"[Warning] AI returned invalid query length: {len(expanded_query)}")
-                return query
+        # Validate that we got a reasonable query back
+        if len(expanded_query) > 0 and len(expanded_query) < 1000:
+            return expanded_query
         else:
-            print(f"[Error] API returned status {response.status_code}: {response.text}")
+            print(f"[Warning] AI returned invalid query length: {len(expanded_query)}")
             return query
             
-    except requests.exceptions.Timeout:
-        print("[Error] AI expansion timeout")
-        return query
     except Exception as e:
         print(f"[Error] AI expansion failed: {e}")
         return query
+
 
 
 def _expand_chinese_query_legacy(query: str) -> str:
